@@ -1,0 +1,468 @@
+iOS面试准备
+
+1、UIView、UIWindow、CALayer的区别与联系？
+
+（1）UIWindow是UIView的子类，是app启动完毕后，创建的第一个视图控件，理论上只有一个UIWindow，如有多个，其视图切换和响应逻辑要特别注意；
+UIWindow的主要作用：
+    a.展示app的可视内容；
+    b.事件分发；
+    c.屏幕旋转，和app的控制器（viewController）一起处理。
+此外，ActionSheet和AlertView等悬浮窗其实是显示在另一个window上的。
+如果window没有占满整个屏幕，视图依然能照常显示，但是触屏事件无法正常分发（类似UIView）。
+
+（2）UIView的继承结构：UIResponder:NSObject,可以响应事件. （UIKit框架）
+在iOS中，看得见摸得着的东西基本上都是UIView,UIView之所以能显示在屏幕上，完全是因为它内部的图层,当UIView需要显示到屏幕上时，会调用drawRect:方法进行绘图，并且会将所有内容绘制在自己的图层上，绘图完毕后，系统会将图层拷贝到屏幕上，于是就完成了UIView的显示;
+换句话说，UIView本身不具备显示的功能，拥有显示功能的是它内部的图层。
+
+（3）CALayer继承于NSObject，不可以响应事件.（QuartzCore框架）
+它真正的绘图部分,其树形结构类似UIView的子View树形结构，可以向它的layer上添加子layer，来完成某些特殊的表示。UIView的layer图层大致有三种：
+    a.逻辑层，就是代码里可以操纵的，例如更改layer的属性等等就在这一份。
+    b.动画层，这是一个中间层，系统在这一层上更改属性，进行各种渲染操作。
+    c.显示层，这棵树的内容是当前正被显示在屏幕上的内容。
+    这三层的逻辑结构都是一样的，区别只有各自的属性。
+
+
+2、property常见字段，assign、retain、copy、weak、strong、nonatomic、atomic？
+
+assign：简单赋值，不更改索引计数（Reference Counting），用于修饰基本类型；
+retain：MRC下，释放旧的对象，将旧对象的值赋予输入对象，引用计数（retainCount）+1 ,用于对象；
+copy：建立一个引用计数（retainCount）为1的对象，然后释放旧对象，用于对象，如果调用copy的是数组，则为指针复制（浅复制），仅仅复制子元素的指针；
+weak：取代之前的assign，对象销毁之后会自动置为nil，防止野指针。Delegate基本总是使用weak，以防止循环引用。特殊情况是，希望在dealloc中调用delegate的某些方法进行释放，此时如果使用weak将引起异常，因为此时已经是nil了，那么采用assign更为合适。
+strong：强引用持有对象，相当于retain，在ARC环境为默认属性类型。
+nonatomic：对属性赋值的时候不加锁，多线程并发访问会提高性能。
+atomic：意思就是setter/getter这个函数，是一个原语操作，如果有多个线程同时调用setter的话，不会出现某一个线程执行完setter全部语句之前，另一个线程开始执行setter情况，相当于函数头尾加了锁一样，可以保证数据的完整性。默认为atomic；
+
+区别：
+一：copy与retain： 
+a、copy其实是建立了一个相同的对象，而retain不是；
+b、copy是内容拷贝，retain是指针拷贝；
+c、copy是内容的拷贝 ,对于像NSString,的确是这样，但是如果copy的是一个NSArray呢?这时只是copy了指向drray中相对应元素的指针.这便是所谓的"浅复制".
+e、copy的情况：NSString *newPt = [pt copy];此时会在堆上重新开辟一段内存存放@"abc" 比如0X1122 内容为@"abc 同时会在栈上为newPt分配空间 比如地址：0Xaacc 内容为0X1122 因此retainCount增加1供newPt来管理0X1122这段内存；
+二：assign与retain：
+a、assign: 简单赋值，不更改索引计数；
+b、assign的情况：NSString *newPt = [pt assign];此时newPt和pt完全相同 地址都是0Xaaaa 内容为0X1111 即newPt只是pt的别名，对任何一个操作就等于对另一个操作，因此retainCount不需要增加；
+c、assign就是直接赋值；
+d、retain使用了引用计数，retain引起引用计数加1,release引起引用计数减1，当引用计数为0时，dealloc函数被调用，内存被回收；
+e、retain的情况：NSString *newPt = [pt retain];此时newPt的地址不再为0Xaaaa，可能为0Xaabb 但是内容依然为0X1111。因此newPt和pt都可以管理"abc"所在的内存，因此retainCount需要增加1；
+三：weak和strong  (谁持有,谁strong;谁借用,谁weak)
+    a、weak和strong属性只有在你打开ARC时才会被要求使用，这时你是不能使用retain、release、autorelease操作的，因为ARC会自动为你做好这些操作，但是你需要在对象属性上使用weak和strong,其中strong就相当于retain属性，而weak相当于assign。
+    b、只有一种情况你需要使用weak（默认是strong），就是为了避免retain cycles（就是父类中含有子类{父类retain了子类}，子类中又调用了父类{子类又retain了父类}，这样都无法release）
+    c、声明为weak的指针，指针指向的地址一旦被释放，这些指针都将被赋值为nil。这样的好处能有效的防止野指针。
+四：用法注意：
+a.具体一点：IBOutlet可以为weak，NSString为copy，Delegate一般为weak，其他的看情况。一般来说，类 “内部”的属性设置为strong，类“外部”的属性设置为weak。说到底就是一个归属权的问题。小心出现循环引用导致内存无法释放。
+
+
+3、ARC：编译器自动插入retain／release代码，减少程序员的代码输入和失误。该机能在iOS5/Mac OS X 10.7开始导入，利用Xcode4.2以后可以使用该特性。
+a、通过属性来管理实例变量（init/dealloc除外)，在dealloc中释放所有属性。dealloc中会自动加入释放实例变量的代码，不需要手动增加释放实例变量的代码，不需要手动调用[super dealloc]。
+b、不需要调用retain,release,autorelease,编译器会自动插入相关代码。
+c、注意命名方式，不要以copyXXX方式命名不想进行retain的方法，编译器会根据方法名自动retain。
+d、C语言结构体中不要有对象指针。
+e、id和void*只能通过桥接转换来进行转换。
+f、不要使用NSAutoreleasePool,而是使用@autoreleasepool{}代码块。
+
+
+4、dealloc
+
+a、移除观察者observers
+b、注销通知notification
+c、设置非weak的delegate为nil
+d、取消timer
+
+
+5、__block和__weak修饰符的区别：
+
+a、__block不管是ARC还是MRC模式下都可以使用，可以修饰对象，还可以修饰基本数据类型。
+b、__weak只能在ARC模式下使用，也只能修饰对象（NSString），不能修饰基本数据类型（int）。
+c、__block对象可以在block中被重新赋值，__weak不可以。
+d、__block对象在block中是可以被修改、重新赋值的。
+e、__block对象在block中不会被block强引用一次，从而不会出现循环引用问题。
+__weak 本身是可以避免循环引用的问题的，但是其会导致外部对象释放了之后，block内部也访问不到这个对象的问题，我们可以通过在block内部声明一个__strong的变量来指向weakObj，使外部对象既能在block内部保持住，又能避免循环引用的问题。
+
+__block本身无法避免循环引用的问题，但是我们可以通过在block内部手动把blockObj赋值为nil的方式来避免循环引用的问题。另外一点就是__block修饰的变量在block内外都是唯一的，要注意这个特性可能带来的隐患。
+
+
+5、常见的Http状态码有哪些？
+
+http状态码：302是请求重定向。500以上是服务器错误。400以上是请求链接错误或者找不到服务器。200以上是正确。100以上是请求接受成功。
+
+
+6.单例的写法。在单例中使用数组要注意什么？
+
+// GCD方式创建单例
+static PGSingleton *sharedSingleton = nil;
++ (instancetype)sharedSingleton {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        sharedSingleton =[[PGSingleton alloc] init];
+    });
+    
+    return sharedSingleton;
+}
+
+// 互斥锁方式
++ (instancetype)sharedSingleton {
+    @syncronized(self) { 
+         if (sharedSingleton == nil) {
+              sharedSingleton = [[PGSingleton alloc] init];
+         }
+    }
+
+    return sharedSingleton;
+}
+
+// 互斥锁会影响性能，所以最好还是使用GCD方式创建单例。
+
+上面的写法其实不是标准写法，标准写法需要重写copyWithZone、allocWithZone、init方法，确保以任何方式创建出来的对象只有一个。
+
+// 重写allocWithZone:方法，在这里创建唯一的实例(注意线程安全)
++ (instancetype)allocWithZone:(struct _NSZone *)zone {
+    @syncronized(self) {
+        if (sharedSingleton == nil) {
+            sharedSingleton = [super allocWithZone:zone];
+        }
+    }
+
+    return sharedSingleton;
+}
+
+- (id)copyWithZone:(struct _NSZone *)zone {
+    return sharedSingleton;
+}
+
+- (id)mutableCopyWithZone:(NSZone *)zone {
+    return sharedSingleton;
+}
+
+单例使用NSMutableArray的时候，防止多个地方对他同时遍历和修改的话，需要加原子属性。并且property用strong,并且写一个遍历和修改的方法。加上锁. Lock,UnLock.
+
+
+// 是否为ARC环境
+#if _has_feature(objc_arc)
+   // arc
+
+#else 
+   // MRC
+
+#endif
+
+
+7.static关键字的作用
+
+a、函数体内的static变量作用域为该函数体，不同于auto变量，内存只能被分配一次，因此其值在下次调用时仍为上次值；
+b、在模块内的static全局变量可以被模块内所用函数访问，但不能被模块外其它函数访问；
+c、在模块内的static函数只可被这一模块内的其它函数调用，这个函数的使用范围被限制在声明它的模块内；
+d、在类中的static成员变量属于整个类所拥有，对类的所有对象只有一份拷贝；
+e、在类中的static成员函数属于整个类所拥有，这个函数不接收this指针，因而只能访问类的static成员变量。
+
+
+8.iOS 中的事件的传递:响应者链
+
+1、Hit-Test 机制
+当用户触摸(Touch)屏幕进行交互时，系统首先要找到响应者（Responder）。系统检测到手指触摸(Touch)操作时，将Touch 以UIEvent的方式加入UIApplication事件队列中。UIApplication从事件队列中取出最新的触摸事件进行分发传递到UIWindow进行处理。UIWindow 会通过hitTest:withEvent:方法寻找触碰点所在的视图，这个过程称之为hit-test view。在顶级视图（Root View）上调用pointInside:withEvent:方法判断触摸点是否在当前视图内；
+
+hitTest 的顺序如下
+UIApplication -> UIWindow -> Root View -> ··· -> subview
+响应者链顺序如下：Initial View -> View Controller（如果存在） -> superview -> · ··  -> rootView -> UIWindow -> UIApplication
+
+
+9.堆和栈的区别
+
+只有OC对象才需要进行内存管理，本质原因：
+    OC对象存放于堆里面(堆内存要程序员手动回收)
+    非OC对象一般放在栈里面(栈内存会被系统自动回收)
+按管理方式分：
+    对于栈来讲，是由系统编译器自动管理，不需要程序员手动管理。
+    对于堆来讲，释放工作由程序员手动管理，不及时回收容易产生内存泄露memory leak。
+按分配方式分：
+    堆是动态分配和回收内存的，没有静态分配的堆；
+    栈有两种分配方式：静态分配和动态分配；
+        静态分配是系统编译器完成的，比如局部变量的分配；
+        动态分配是有alloc函数进行分配的，但是栈的动态分配和堆是不同的，它的动态分配也由系统编译器进行释放，不需要程序员手动管理；
+
+一位网友用10个字总结了堆和栈的区别
+    栈是吃了吐 堆是吃了拉
+虽然不是很文雅，凑合着理解，凑合着看吧！
+
+
+10.UIViewController的完整生命周期
+
+alloc
+initWithNibName:bundle:
+init
+loadView (view == nil)
+viewDidLoad (view从nib文件初始化的时候才被调用)
+viewWillDisappear:
+viewWillAppear:
+viewDidAppear:
+viewDidDisappear:
+dealloc
+
+viewDidLoad这个方法在UIViewController的子界面都被加载完成以后会被自动调用（不管是从xib中加载的，还是从loadView里面加载的），你应该在这个方法里面做后续的工作。
+一个新的UIViewController被创建并被push出来的时候，或者一个旧的UIViewController在收到内存警告之后再被显示出来的时候，系统都会自动调用这个方法，不需要用户调用执行。
+
+当app收到内存警告的时候，会调用每一个VC的didRecieveMemoryWarning方法.调用viewWillUnload以后，会将VC.view属性设置成nil，然后在调用viewDidUnload方法，这个时候我们可以释放那些强引用的对象。
+关 于viewDidUnload ：在发生内存警告的时候如果本视图不是当前屏幕上正在显示的视图的话， viewDidUnload将会被执行，本所有子视图将被销毁，以释放内存。 因此当这个视图再次显示在屏幕上的时候，viewDidLoad 再次被调用，以构造视图。
+
+
+11、UIImageView添加圆角
+
+方法 1:通过设置layer的属性；	
+    imgView.layer.cornerRadius = 10;
+    // 这一行代码是很消耗性能的
+    imgView.clipsToBounds = YES;
+    这是离屏渲染（off-screen-rendering），消耗性能的。
+
+方法 2:使用贝塞尔曲线UIBezierPath和Core Graphics框架画出一个圆角；
+    UIImageView *imageView = [[UIImageView alloc]initWithFrame:CGRectMake(100, 100, 100, 100)];
+    imageView.image = [UIImage imageNamed:@"1"];
+    // 开始对imageView进行画图
+    UIGraphicsBeginImageContextWithOptions(imageView.bounds.size, NO, 1.0);
+    // 使用贝塞尔曲线画出一个圆形图
+    [[UIBezierPath bezierPathWithRoundedRect:imageView.bounds cornerRadius:imageView.frame.size.width] addClip];
+    [imageView drawRect:imageView.bounds];
+    imageView.image = UIGraphicsGetImageFromCurrentImageContext();
+     //结束画图
+    UIGraphicsEndImageContext();
+    [self.view addSubview:imageView];
+
+方法 3:使用CAShapeLayer和UIBezierPath设置圆角；
+    首先需要导入<AVFoundation/AVFoundation.h>
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UIImageView *imageView = [[UIImageView alloc]initWithFrame:CGRectMake(100, 100, 100, 100)];
+    imageView.image = [UIImage imageNamed:@"1"];
+    UIBezierPath *maskPath = [UIBezierPath bezierPathWithRoundedRect:imageView.bounds byRoundingCorners:UIRectCornerAllCorners cornerRadii:imageView.bounds.size];
+
+    CAShapeLayer *maskLayer = [[CAShapeLayer alloc] init];
+    // 设置大小
+    maskLayer.frame = imageView.bounds;
+    // 设置图形样子
+    maskLayer.path = maskPath.CGPath;
+    imageView.layer.mask = maskLayer;
+    [self.view addSubview:imageView];
+}
+
+这三种方法中第三种最好，对内存的消耗最少啊，而且渲染快速。
+
+
+12、OC的理解与特性
+
+OC作为一门面向对象的语言，自然具有面向对象的语言特性：封装、继承、多态。它既具有静态语言的特性（如C++），又有动态语言的效率（动态绑定、动态加载等）。总体来讲，OC确实是一门不错的编程语言。
+
+Objective-C具有相当多的动态特性，表现为三方面：动态类型（Dynamic typing）、动态绑定（Dynamic binding）和动态加载（Dynamic loading）。之所以叫做动态，是因为必须到运行时才会做一些事情。
+
+动态类型：即运行时再决定对象的类型，这种动态特性在日常的应用中非常常见，简单来说就是id类型。事实上，由于静态类型的固定性和可预知性，从而使用的更加广泛。静态类型是强类型，而动态类型属于弱类型，运行时决定接受者。
+
+动态绑定：基于动态类型，在某个实例对象被确定后，其类型便被确定了，该对象对应的属性和响应消息也被完全确定。
+
+动态加载：根据需求加载所需要的资源，最基本就是不同机型的适配，例如，在Retina设备上加载@2x的图片，而在老一些的普通苹设备上加载原图，让程序在运行时添加代码模块以及其他资源，用户可根据需要加载一些可执行代码和资源，而不是在启动时就加载所有组件，可执行代码可以含有和程序运行时整合的新类。
+
+注意事项
+    如果一个对象有一个_strong类型的指针指向着，找个对象就不会被释放。如果一个指针指向超出了它的作用域，就会被指向nil。如果一个指针被指向nil，那么它原来指向的对象就被释放了。当一个视图控制器被释放时，它内部的全局指针会被指向nil。用法“：不管全局变量还是局部变量用_strong描述就行。
+    局部变量：出了作用域，指针会被置为nil。
+    代理使用unsafe_unretained就相当于assign；
+    block中为了避免循环引用问题，使用_weak描述；
+    声明属性时，不要以new开头。如果非要以new开头命名属性的名字，需要自己定制get方法名;
+    如果要使用自动释放池，用@autoreleasepool{}
+    在非ARC工程中采用ARC去编译某些类：-fobjc-arc。
+    在ARC下的工程采用非ARC去编译某些类：-fno-fobjc-arc。
+
+
+13、如何理解MVC设计模式
+
+MVC是一种架构模式，M表示Model，V表示视图View，C表示控制器Controller。其用意在于将数据与视图分离开来。
+    Model：负责存储数据,并定义操控、处理数据的逻辑和运算；
+    View：展示数据，响应用户操作交互事件；
+    Controller：是Model和View的协调者。直接与Model和View进行通信，整体控制着数据的更新和视图对象的生命周期。
+    View与Controller通信方式：代理协议、outlet、target-action;
+    Model也要与Controller通信方式：Notification、KVO；
+    Model和View不能直接进行通信，这样会违背MVC设计模式。
+
+    MVC不足：
+    1）MVC在现实应用中的不足，Model和View不直接通信；
+    2）Controller代码量较大，臃肿，可测试性较差，难以维护；
+    3）Model过于轻量级；
+    4）遗失的网络逻辑；
+
+
+14、如何理解MVVM设计模式
+
+    Model层：负责存储数据,并定义操控、处理数据的逻辑和运算；
+    ViewModel层：就是View和Model层的粘合剂，他是一个放置用户输入验证逻辑、视图显示逻辑、发起网络请求和其他各种各样的代码的极好的地方。说白了，就是把原来ViewController层的业务逻辑和页面逻辑等剥离出来放到ViewModel层。
+    View层：就是ViewController层，他的任务就是从ViewModel层获取数据，然后显示。
+
+   （1）可以兼容你当下使用的MVC架构；
+   （2）增强可测试性；
+   （3）能够使得Model层和View层解耦；
+   （4）可能会增大代码量，但是复杂度会降低。
+
+
+15、Objective-C 中是否支持垃圾回收机制？
+
+    OC是支持垃圾回收机制的,但是apple的移动终端中,是不支持GC的,Mac桌面系统开发中是支持的.
+    移动终端开发是支持MRC、ARC。
+       MRC：程序员手动管理内存。
+       ARC：IOS5之后推出的新技术,本质上和MRC相同。在编写代码时,程序员不再需要手动添加管理内存的代码,这些工作由编译器来完成。
+
+
+16、Protocol协议及委托代理（Delegate）传值
+   Object－C是不支持多继承的，所以很多时候都是用Protocol（协议）来代替。Protocol（协议）定义了一套公用的接口，但不能提供具体的实现方法。也就是说，它只告诉你要做什么，但具体怎么做，它不关心。
+   委托代理（Delegate）：它本身是一个设计模式，它的意思是委托别人去做某事，方便类与类之间的反向传值。 
+
+
+17、简述类目category优点和缺点
+
+类别的作用：
+    a) 将类的实现分开在多个不同的文件或多个不同框架中；
+    b) 声明私有方法；
+    c) 模拟多继承，给系统原有类添加方法，不能扩展属性；
+    d) 把framework的私有方法公开。
+优点：
+    a) 不需要通过增加子类而增加现有类的行为(方法),且类目中的方法与原始类方法基本没有区别;
+    b) 通过类目可以将庞大一个类的方法进行划分,从而便于代码的日后的维护、更新以及提高代码的阅读性;
+缺点：
+    a) 无法向类目添加实例变量,如果需要添加实例变量,只能通过定义子类的方式;
+    b) 类目中的方法与原始类以及父类方法相比具有更高优先级,如果覆盖父类的方法,可能导致super消息的断裂。因此,最好不要覆盖原始类中的方法。   
+与extension的异处：
+    a) extension是编译器决议。
+        与类的头文件@interface、实现文件@implement一起形成一个完整的类。
+        必须用一个类的源码才能为它extension，比如你无法为NSString添加extension。
+    b) category是运行期决议的。
+        所以extension可以添加实例变量，而category作为运行期决议是无法添加实例变量，因为会破坏类的内存布局。
+        类别不能声明变量，类别不可以直接添加属性。添加property属性，需要描述setter方法，才不会报错。
+进阶：
+    a) 一个类的两个category，如果存在方法名相同，是根据buildPhases->Compile Sources里面的从上至下顺序编译的，即后编译的会被调用。
+    在Xcode->Edit Scheme->Run->Arguments->Environment Variables中添加运行时环境变量可打印相应category加载消息。
+    b) 虽说category中无法直接添加属性，但是我们在Category中可以利用运行时（runtime）添加属性。
+       这个函数只能在“构建一个类的过程中”调用。一旦完成类定义，就不能再添加成员变量了。
+    - (void)setName:(NSString *)name {
+         objc_setAssociatedObject(self, "name", name, OBJC_ASSOCIATION_COPY);
+    }
+    - (NSString*)name {
+        NSString *nameObject = objc_getAssociatedObject(self, "name");
+        return nameObject;
+    }
+    c）类目里定义的方法也会被原始类的子类所继承，就跟原始类的其他方法一样。
+
+
+19、循环引用的产生原因，以及解决方法
+    两个或多个对象间相互持有，形成环路，使得对象无法销毁，内存得不到释放，形成循环引用。 （强引用形成了闭环）
+    解决方法：
+       事先知道存在循环引用的地方，在合理的位置主动断开一个引用，使对象回收；
+       使用弱引用的方法。
+    引起循环引用的三种场景：
+      （1）计时器NSTimer。NSTimer初始化时要指定self为target，容易造成循环引用。 另一方面，若timer一直处于validate的状态，则其引用计数将始终大于0。
+      （2）block
+      （3）委托delegate 不是所有使用了Block都会出现Self循环引用问题，只有self拥有Block的强引用才会出现这种情况。
+
+
+20、Apple设备尺寸和编程尺寸
+    
+    设备     系统      分辨率     屏幕尺寸     倍数
+    4       iOS4     320X480    3.5英寸     2X
+    4s      iOS5     320X480    3.5英寸     2X
+    5       iOS6     320X568    4.0英寸     2X
+    5s/c    iOS7     320X568    4.0英寸     2X
+    6       iOS8     375X667    4.7英寸     2X
+    6plus   iOS8     414X736    5.5英寸     3X
+    6s      iOS9     375X667    4.7英寸     2X
+    6splus  iOS9     414X736    5.5英寸     3X
+    7       iOS10    375X667    4.7英寸     2X
+    7plus   iOS10    414X736    5.5英寸     3X
+
+
+21、网络七层协议
+
+OSI 模型
+    1) 应用层（http）
+    2) 表示层
+    3) 会话层
+    4) 传输层（TCP、UDP）
+    5) 网络层（IP）
+    6) 数据链路层
+    7) 物理层
+TCP/IP 分层模型
+    1) 应用层
+    4) 传输层（TCP、UDP）
+    5) 网间层（IP）
+    6) 网络接口层
+
+22、对NSUserDefaults的理解
+
+    NSUserDefaults：是iOS系统提供的一个单例类，以字典形式保存数据，iOS会自动把字典中的键值对转换成对应的XML文件（也就是plist文件）。默认存储到 ~/Applications/sandBox/library/Preferences文件夹下。
+    支持的数据类型有：NSNumber、NSString、NSDate、NSArray、NSDictionary、BOOL、NSURL。
+    NSUserDefaults在我们编写代码中是最常用的一个永久保存数据的方法，也是最简单的。
+    NSUserDefaults是定时把缓存中的数据写入磁盘的，而不是即时写入，为了防止在写完NSUserDefaults后程序退出导致的数据丢失，可以在写入数据后使用synchronize强制立即将数据写入磁盘。
+
+    NSUserDefaults存储自定义对象：
+        1）将自定义类型转换为NSData类型，在.h文件中声明NSCoding协议，再在.m中实现encodeWithCoder方法和initWithCoder方法；
+        2）将自定义类型数据存 NSUserDefaults中。
+
+
+23、iOS清空NSUserDefaults下的内容
+
+// 方法一
+    NSString *appDomain = [[NSBundle mainBundle] bundleIdentifier];
+    [[NSUserDefaults standardUserDefaults] removePersistentDomainForName:appDomain];
+//方法二
+    - (void)resetDefaults {
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSDictionary* dict = [defaults dictionaryRepresentation];
+        for (id key in dict) {
+            [defaults removeObjectForKey:key];
+        }
+        [defaults synchronize];
+    }
+
+
+24、SDWebImage原理
+
+    调用类别的方法：
+    a）内存：从内存中（字典）找图片（当这个图片在本次程序加载过），找到直接使用；
+    b）沙盒：从沙盒中找，找到直接使用，缓存到内存；
+    c）网络：从网络上获取，使用，缓存到内存，缓存到沙盒。
+
+
+25、LayoutSubViews在什么时候被调用？
+
+    在某个类的内部调整子视图时，需要调用。在外部设置subviews的位置，不需要重写。
+    a）初始化不会触发，如果设置了frame不为CGRectZero会触发；
+    b）addSubview时，触发；
+    c）当View本身的frame改变时，触发；
+    d）滚动UIScrollView，触发；
+    e）旋转Screen，触发父UIView上的layoutSubviews事件；
+    f）改变一个UIView大小的时，触发父UIView上的layoutSubviews事件。
+
+    刷新：
+    setNeedsLayout，标记为需要重新布局，不立即刷新，但layoutSubviews一定会被调用，配合layoutIfNeeded立即更新；
+    layoutIfNeeded，如果有需要刷新的标记，立即调用layoutSubviews进行布局，在视图第一次显示之前，标记总是“需要刷新”的，可以直接调用[view layoutIfNeeded]。
+    重绘：
+    drawRect:方法：重写此方法，执行重绘任务；
+    setNeedsDisplay:方法标记为需要重绘，异步调用drawRect；
+    setNeedsDisplayInRect:方法：标记为需要局部重绘；
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,149 @@
+一份"有点难"的iOS面试题 - MrPeak的文章 - 知乎专栏
+
+作者：MrPeak
+链接：https://www.zhihu.com/question/19604641/answer/44151044
+来源：知乎
+著作权归作者所有，转载请联系作者获得授权。
+
+1. 什么是arc？（arc是为了解决什么问题诞生的？）
+2. 请解释以下keywords的区别： assign vs weak, __block vs __weak
+3. __block在arc和非arc下含义一样吗？
+4. 使用atomic一定是线程安全的吗？
+5. 描述一个你遇到过的retain cycle例子。(别撒谎，你肯定遇到过)
+6. +(void)load; +(void)initialize；有什么用处？
+7. 为什么其他语言里叫函数调用， objective c里则是给对象发消息（或者谈下对runtime的理解）
+8. 什么是method swizzling?
+9. UIView和CALayer是啥关系？
+10. 如何高性能的给UIImageView加个圆角？（不准说layer.cornerRadius!）
+11. 使用drawRect有什么影响？（这个可深可浅，你至少得用过。。）
+12. ASIHttpRequest或者SDWebImage里面给UIImageView加载图片的逻辑是什么样的？（把UIImageView放到UITableViewCell里面问更赞）
+13. 麻烦你设计个简单的图片内存缓存器（移除策略是一定要说的）
+14. 讲讲你用Instrument优化动画性能的经历吧（别问我什么是Instrument）
+15. loadView是干嘛用的？
+16. viewWillLayoutSubView你总是知道的。。
+17. GCD里面有哪几种Queue？你自己建立过串行queue吗？背后的线程模型是什么样的？
+18. 用过coredata或者sqlite吗？读写是分线程的吗？遇到过死锁没？咋解决的？
+19. http的post和get啥区别？（区别挺多的，麻烦多说点）
+20. 我知道你大学毕业过后就没接触过算法数据结构了，但是请你一定告诉我什么是Binary search tree? search的时间复杂度是多少？我很想知道！
+
+能准确的答对80%以上的朋友请联系我，I want you!
+觉得100%秒杀 so easy的朋友也请联系我，另外20道隐藏关卡我也替你准备好了！ 
+
+
+
+作者：梅露露露露
+链接：https://www.zhihu.com/question/19604641/answer/65747458
+来源：知乎
+著作权归作者所有，转载请联系作者获得授权。
+
+1. 什么是arc？（arc是为了解决什么问题诞生的？）
+
+    什么是arc：arc就是自动引用技术，作用是编译器代替程序员为对象添加retain/release。（我觉得了解到这种程度就差不多了！）
+
+    arc是为了解决什么问题诞生的？
+
+对象的生命周期包括诞生和死亡。alloc一个对象obj,obj的retain+1,结束使用后调用[obj release]，这样对象的retainCount为0，不会造成内存泄漏。MRC——>ARC的过程就是手动添加改为了自动添加的过程。
+
+那么为什么弃用MRC改用ARC呢？是为了解决retain和release不匹配错误，而导致不匹配的原因有：
+
+1.创建一个对象，要确保该对象使用结束后销毁，避免造成内存泄露。（用完未销毁）
+
+2.解决重复释放.(谁创建谁释放，谁释放，重复释放会导致奔溃)
+
+说实话，我是14年开始学习IOS的，一接触就是ARC模式了，现在想要百度MRC资料都要换很多姿势，请问这个问题真的有意义吗？
+
+2.请解释以下keywords的区别： assign vs weak, __block vs __weak
+
+    assign和weak都是用于修饰弱引用，而他们的区别是：
+
+assign:简单赋值，修饰基本数据类型（NSInteger）、c数据类型(int)和delegate(避免循环引用)。
+
+那么assign为什么不用来修饰对象呢？因为assign会导致下面这个问题：
+
+指针a指向一块内存，这时把a赋给了b，如果使用assign属性，a和b就指向同一块内存。如果这时候把a释放了，那么b在使用使用这块内存的时候就会crash.
+
+weak：弱引用，修饰对象类型。
+
+延伸：a.为什么基本类型和C数据类型的修饰用assign？
+
+因为基本数据类型不是对象，在内存中创建和使用后，在一个方法体结束后就被删除。基本数据类型不需要引用计数，而其他修饰词需要引用计数，所以使用assign。
+
+2.__block和__weak的区别：
+
+__block:引用修饰，所以被__block修饰的变量的值是动态变化的，也就是可以被重新赋值。
+
+注意：如果在block内部要修改外部变量而不用__block修饰，会直接报错。
+
+__weak:主要作用是避免循环引用， __weak typeof (self)weakSelf = self;
+链接：iOS: ARC和非ARC下使用Block属性的问题
+
+3. __block在arc和非arc下含义一样吗？
+
+MRC下的__block相当于ARC下的__weak，而ARC下的__block是为了修饰一个变量能在block中被修改。
+
+4. 使用atomic一定是线程安全的吗？
+
+atomic的作用是为属性的setter/getter方法加锁，避免多线程情况下访问setter/getter产生数据错乱。所以在访问setter/getter方法时是线程安全的，而对于进行其他操作的多线程则和atomic没有直接关系
+
+5.描述一个你遇到过的retain cycle例子
+
+做法：自己真实碰到过的，在-(void)dealloc里invalidate一个NSTimer对象。
+
+这么做会retain cycle的原因：
+
++ (NSTimer *)timerWithTimeInterval:(NSTimeInterval)seconds target:(id)target selector:(SEL)aSelector userInfo:(id)userInfo repeats:(BOOL)repeats
+
+这个方法在官方文档里的说明：
+
+The timer maintains a strong reference to this object until it (the timer) is invalidated.
+
+解释：timer对象会对object拥有一个强引用，如果object是self,那么self就被timer retain,如果timer一直不invalidated，那么dealloc就一直不会被调用。
+
+解决方法：在viewWillDisappear的时候invalidateNSTimer对象。
+
+- (void)viewWillDisappear:(BOOL)animated{
+    [super viewWillDisappear:animated];
+    [timer invalidate];
+}
+
+
+block中的retain cycle:
+
+block会对用到的对象做一个copy操作，retainCount+1,所以block对用到的对象就有了一个强引用。那么用到的对象是否对block有一个强引用是要看具体条件的。
+
+下面就产生了循环引用
+
+ [self doSomething:^(BOOL param) {
+        self.tage = param;
+    }];
+    
+    self.doSomethingWithBlock(YES);
+
+
+6.+(void)load; +(void)initialize；有什么用处？
+
+
+app启动后会自动调用每个类+ (void)load方法(会在didFinishLaunchingWithOptions前调用)，而+ (void)initialize则是第一次主动使用类的时候调用(比如初始化后就会调用这个方法)
+
+共同点：不考虑主动调用，系统默认只会在每个类各调用一次。
+
+7. 为什么其他语言里叫函数调用， objective c里则是给对象发消息（或者谈下对runtime的理解）
+
+
+当我们给对象发送消息时[tableView cellForRowAtIndexPath:indexPath],编译器会把这段Object-c代码转换为c的函数调用objc_msgSend(tableVIew,@selector(cellForRowAtIndexPath:),indexPath),其中indexPath是参数。
+
+8. 什么是method swizzling?
+
+
+黑魔法——偷梁换柱。每个类都有一个方法列表，存放着selector的名字和对应方法实现的映射关系。而IMP就是指向方法实现(类似指针)。method swizzling可以做到运行时更换selector指向对应方法实现的IMP。比如selectorA指向A实现，selectorB指向B实现，更换两个方法的IMP后，selectorA调用的就是B实现了。
+
+9. UIView和CALayer是啥关系？
+
+
+1.在IOS上创建一个UIView就默认创建一个CALaye,可以通过如下方法获得
+
+CALayer *layer = self.view.layer;
+
+
+2.Layer提供内容绘制和动画，但它本身不能创建可视界面，需要添加到UIView.
+3.Layer不能响应事件。 
